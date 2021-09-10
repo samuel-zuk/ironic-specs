@@ -10,31 +10,41 @@ Ironic Power Control Intermediary
 
 https://storyboard.openstack.org/#!/story/2009184
 
-Currently, if an Ironic node lessee wishes to access power management APIs
-directly, they would require either admin privileges or the power credentials
-to the BMC of the node in question. Considering that one of the primary
-motivations for implementing node multi-tenancy was to allow for non-privileged
-users to perform this sort of action, the absence of this functionality is a
-potential roadblock for improving multi-tenant support. [0]_ [1]_
+One important aspect of our goal of improving support for node multi-tenancy
+is to provide a seamless user experience for node lessees. This includes
+enabling tenants to use their existing provisioning workflows on leased nodes
+and to have these tools work as expected. However, many such tools expect to
+have access to power control credentials and it is here where we run into a
+major problem.
 
-Since giving a node lessee direct BMC access is very unwise, we instead intend
-to emulate a standards-based interface (preferably Redfish, although IPMI is
-another valid option) directly within Ironic for use by node lessees. This
-way, Ironic can handle authenticating this request directly and provisioning
-workflows that require this type of API access can function as expected.
+Currently, for an Ironic node lessee to obtain direct access to power
+management APIs, they would require either admin privileges or the power
+credentials to the BMC of the node in question. For many reasons, doing this
+would be very inefficient, insecure, and generally unwise. It also runs
+counter to one of the goals of node multi-tenancy, which is to allow users to
+access these sorts of workflows without being granted elevated privileges.
+[0]_ [1]_
+
+Because we do not wish to grant lessees direct access to the BMC, to enable
+the use of existing provisioning tools, we instead intend to emulate a
+standards-based interface (Redfish, in this case), directly within Ironic for
+use by node lessees. This way, authentication can instead go through Keystone
+and provisioning workflows that require power credentials can function as
+expected.
 
 
 Problem description
 ===================
 
-As it stands, the only way an unprivileged user, such as a lessee, can access
-power management APIs would be directly through the BMC with the node's power
-credentials. But since these credentials wouldn't necessarily change, the
-lessee could re-use them to change power settings after they were supposed to
-have lost access.
+As it stands, the only way an unprivileged user, such as a lessee, can
+directly access power management APIs would be through the BMC with the node's
+power credentials. But since these credentials wouldn't necessarily change
+after the lessee loses access, they could potentially re-use them to change
+power settings on the node directly, regardless of whether or not they were
+granted permission within OpenStack cloud services.
 
 In a situation like this, the lessee would be forced to use Ironic's API and
-provisioning tools, possibly requiring existing workflows to be completely
+provisioning tools, likely requiring existing workflows to be completely
 refactored. There are many potential cases in which this would be very
 problematic to the end-user, and the alternative solution of providing the
 lessee with power credentials would be a huge security risk unacceptable to
@@ -73,7 +83,9 @@ The workflow for authentication will be as follows:
   application credential UUID as the username, and the credential's secret
   as the password.
 * User receives a token that grants them access to provisioning actions that
-  require authentication
+  require authentication.
+* User performs the provisioning actions they wish to execute, authenticating
+  themselves via the token provided in the previous step.
 * Session is deleted; any further provisioning actions will require
   re-authentication.
 
@@ -107,7 +119,8 @@ REST API impact
 ---------------
 
 The following endpoints will be added, available beginning with a new Bare
-Metal API microversion.
+Metal API microversion. All of the endpoints below mirror those defined in
+version 1.0.0 of the Redfish specification & schema. [6]_ [9]_
 
 * GET /redfish
 
@@ -590,7 +603,10 @@ None.
 
 "openstack baremetal" CLI
 ~~~~~~~~~~~~~~~~~~~~~~~~~
-None.
+Though this addition would include new REST API endpoints, this feature merely
+provides another way for users to access already existing features within the
+Ironic API, which are already accessible from the ``openstack baremetal`` CLI.
+(Equivalent CLI commands are listed above in the `Proposed change`_ section.)
 
 "openstacksdk"
 ~~~~~~~~~~~~~~
@@ -683,19 +699,21 @@ Assignee(s)
 -----------
 
 Primary assignee:
-    Sam Zuk (sam_z / szuk) <szuk@redhat.com>
+  | Sam Zuk (sam_z / szuk) <szuk@redhat.com>
 
 Other contributors:
-    Tzu-Mainn Chen (tzumainn) <tzumainn@redhat.com>
-    Lars Kellogg-Stedman (larsks) <lars@redhat.com>
+  | Tzu-Mainn Chen (tzumainn) <tzumainn@redhat.com>
+  | Lars Kellogg-Stedman (larsks) <lars@redhat.com>
 
 Work Items
 ----------
 
 * Create the necessary API endpoints
-    * Implement the Redfish System -> Ironic Node proxy
-    * Implement the Redfish Session -> Keystone authentication proxy
-    * Write unit tests and functional tests to ensure proper functionality
+
+  * Implement the Redfish System -> Ironic Node proxy
+  * Implement the Redfish Session -> Keystone authentication proxy
+  * Write unit tests and functional tests to ensure proper functionality
+
 * Write documentation for how to use and configure this functionality, for
   users, administrators, and developers.
 * Test this feature on real hardware in a way that mimics expected use cases.
@@ -739,3 +757,4 @@ References
 .. [6] https://www.dmtf.org/sites/default/files/standards/documents/DSP0266_1.0.0.pdf
 .. [7] https://docs.openstack.org/api-ref/baremetal
 .. [8] https://www.dmtf.org/sites/default/files/Redfish_School-Sessions.pdf
+.. [9] https://redfish.dmtf.org/schemas/v1/
