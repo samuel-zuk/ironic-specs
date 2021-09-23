@@ -1,1 +1,1 @@
-specs/approved/power-control-intermediary.rst
+../approved/power-control-intermediary.rst
