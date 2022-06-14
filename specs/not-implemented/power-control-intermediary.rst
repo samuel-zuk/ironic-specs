@@ -1,0 +1,1 @@
+../approved/power-control-intermediary.rst
